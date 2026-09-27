@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "BrandKitRecord": {
+      "title": "Brand Strategy Kit Record",
+      "description": "Saved launch-ready brand strategy kit created by a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "originalIdea": { "type": "string" },
+        "brandName": { "type": "string" },
+        "oneLinePitch": { "type": "string" },
+        "positioningStatement": { "type": "string" },
+        "primaryValueProposition": { "type": "string" },
+        "clarified": { "type": "object" },
+        "debate": { "type": "object" },
+        "brandKit": { "type": "object" },
+        "marketGrounding": { "type": "object" },
+        "logoImageUrl": { "type": "string" },
+        "socialLaunchVideoScript": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "originalIdea", "brandName", "brandKit", "createdAt"]
+    },
+    "PublicBrandKitRecord": {
+      "title": "Public Shared Brand Kit Record",
+      "description": "Publicly accessible read-only brand kit record accessible via unique link",
+      "type": "object",
+      "properties": {
+        "shareId": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "creatorEmail": { "type": "string" },
+        "originalIdea": { "type": "string" },
+        "brandName": { "type": "string" },
+        "oneLinePitch": { "type": "string" },
+        "positioningStatement": { "type": "string" },
+        "primaryValueProposition": { "type": "string" },
+        "clarified": { "type": "object" },
+        "debate": { "type": "object" },
+        "brandKit": { "type": "object" },
+        "logoImageUrl": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "viewsCount": { "type": "number" },
+        "isPublic": { "type": "boolean" }
+      },
+      "required": ["shareId", "originalIdea", "brandName", "brandKit", "createdAt", "isPublic"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/brandKits/{kitId}": {
+      "schema": "BrandKitRecord",
+      "description": "User specific saved brand kits"
+    },
+    "/publicBrandKits/{shareId}": {
+      "schema": "PublicBrandKitRecord",
+      "description": "Public read-only shareable brand kits"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "BrandBattle - Multi-Agent Brand Intelligence Platform",
+  "description": "AI-powered brand strategy arena deploying specialized agent debate (Growth VC, Creative Director, Brutal Skeptic) to forge launch-ready startup brand kits.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
