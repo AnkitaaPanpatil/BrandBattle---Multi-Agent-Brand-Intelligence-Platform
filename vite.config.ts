@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(({ mode }) => {
   return {
-    base: mode === 'production' ? '/BrandBattle---Multi-Agent-Brand-Intelligence-Platform/' : '/',
+    base: '/', // Essential for Vercel root hosting
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -13,7 +13,6 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio container environment to prevent WebSocket errors
       hmr: false,
       watch: null,
     },
