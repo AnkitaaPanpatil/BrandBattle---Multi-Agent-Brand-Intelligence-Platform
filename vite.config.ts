@@ -1,11 +1,14 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
 
-export default defineConfig(({ mode }) => {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default defineConfig(() => {
   return {
-    base: '/', // Essential for Vercel root hosting
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -13,8 +16,15 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      port: 3000,
       hmr: false,
-      watch: null,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
+      },
     },
   };
 });
+

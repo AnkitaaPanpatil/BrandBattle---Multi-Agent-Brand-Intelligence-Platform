@@ -9,18 +9,36 @@ import {
   MarketContextSummary,
 } from '../types/brand.js';
 
-const apiKey = process.env.GEMINI_API_KEY || '';
+let cachedAI: GoogleGenAI | null = null;
+let cachedKey: string = '';
 
-const ai = apiKey
-  ? new GoogleGenAI({
-      apiKey,
+export function getAIClient(): GoogleGenAI | null {
+  const currentKey = process.env.GEMINI_API_KEY || '';
+  if (!currentKey) {
+    return null;
+  }
+  if (cachedAI && cachedKey === currentKey) {
+    return cachedAI;
+  }
+  try {
+    cachedKey = currentKey;
+    cachedAI = new GoogleGenAI({
+      apiKey: currentKey,
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
         },
       },
-    })
-  : null;
+    });
+    return cachedAI;
+  } catch (err) {
+    console.warn('[BrandBattle AI] Failed to initialize GoogleGenAI client:', err);
+    return null;
+  }
+}
+
+// Model identifier supporting environment override or standard gemini-2.5-flash
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 function logGeminiNotice(operation: string, err: unknown) {
   const errMsg = err instanceof Error ? err.message : String(err);
@@ -79,6 +97,7 @@ export function safeParseJSON<T = any>(rawText: string | undefined | null): T | 
  */
 export async function clarifyIdea(rawIdea: string): Promise<ClarifiedIdea> {
   let marketGrounding: MarketGroundingData | undefined = undefined;
+  const ai = getAIClient();
 
   // Perform Google Search Grounding to extract real-world competitors & trends
   if (ai) {
@@ -105,9 +124,9 @@ Return ONLY valid JSON matching this schema:
   "whiteSpaceOpportunity": "Clear white-space opportunity for a new brand"
 }`;
 
-      // Search grounding with gemini-3.8-flash
+      // Search grounding with Gemini
       const searchResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: DEFAULT_MODEL,
         contents: searchPrompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -151,7 +170,7 @@ Return ONLY valid JSON matching this schema:
     marketGrounding = generateFallbackMarketGrounding(rawIdea);
   }
 
-  // Next, clarify idea structure with gemini-3.8-flash
+  // Next, clarify idea structure with Gemini
   if (ai) {
     try {
       const prompt = `You are an elite brand intake strategist at BrandBattle.
@@ -177,7 +196,7 @@ Return ONLY valid JSON matching this schema:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: DEFAULT_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -215,6 +234,7 @@ Return ONLY valid JSON matching this schema:
  * Stage 2: Deploy the 3-Persona Multi-Agent Debate Arena
  */
 export async function runAgentDebate(rawIdea: string, clarified: ClarifiedIdea): Promise<DebateStage> {
+  const ai = getAIClient();
   if (ai) {
     try {
       const prompt = `You are orchestrating the BrandBattle Multi-Agent Arena.
@@ -345,7 +365,7 @@ Return ONLY valid JSON matching this exact structure:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: DEFAULT_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -503,6 +523,7 @@ export async function synthesizeBrandKit(rawIdea: string, clarified: ClarifiedId
   const safeDebate = debate || generateFallbackDebate(rawIdea, safeClarified);
 
   let kit: BrandKit | null = null;
+  const ai = getAIClient();
 
   if (ai) {
     try {
@@ -629,7 +650,7 @@ Return ONLY valid JSON matching this schema:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: DEFAULT_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -684,6 +705,7 @@ Return ONLY valid JSON matching this schema:
  * Generate brand logo / visual moodboard concept using Gemini image preview model
  */
 export async function generateBrandLogoAsset(brandKit: BrandKit): Promise<string | null> {
+  const ai = getAIClient();
   if (!ai) return null;
   try {
     const imagePrompt = `Minimalist modern vector brand logo symbol on dark obsidian background for "${brandKit.brandNameProposal}". Visual theme: ${brandKit.visualDirection.themeName}. Concept: ${brandKit.visualDirection.logoConcept.symbolDescription}. Clean lines, geometric elegance, award-winning graphic design, no mockups, isolated center glyph.`;
@@ -716,6 +738,7 @@ export async function askAgentsFollowUp(
   brandKit: BrandKit,
   targetAgent: 'vc' | 'creative' | 'skeptic' | 'all'
 ) {
+  const ai = getAIClient();
   if (ai) {
     try {
       const prompt = `You are running the BrandBattle interactive Q&A console.
@@ -744,7 +767,7 @@ Return valid JSON:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: DEFAULT_MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -1215,6 +1238,16 @@ export interface GenerateLogoParams {
   seed?: number;
 }
 
+function escapeXml(unsafe: string | undefined | null): string {
+  if (!unsafe) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 /**
  * Generates an image / vector logo placeholder based on the brand name and archetype
  */
@@ -1240,6 +1273,12 @@ export async function generateCustomBrandLogo(params: GenerateLogoParams) {
       ? (words[0][0] + words[1][0]).toUpperCase()
       : cleanName.slice(0, 2).toUpperCase());
 
+  // XML-safe escaped strings (strictly lowercase &amp;, &lt;, &gt;)
+  const safeBrandName = escapeXml(cleanName);
+  const safeArchetypeUpper = escapeXml((archetype || '').toUpperCase());
+  const safeThemeNameUpper = escapeXml((themeName || '').toUpperCase());
+  const safeMonogram = escapeXml(resolvedMonogram);
+
   // Colors
   const colorList: string[] = colors.map((c) => (typeof c === 'string' ? c : c.hex));
   const bgDark = colorList[0] || '#070a10';
@@ -1247,20 +1286,44 @@ export async function generateCustomBrandLogo(params: GenerateLogoParams) {
   const accentColor = colorList[2] || '#f59e0b';
   const lightColor = colorList[3] || '#f8fafc';
 
-  const isRebel =
+  const isLight = background === 'light';
+  const isTransparent = background === 'transparent';
+  const bgFill = isLight ? '#ffffff' : isTransparent ? 'none' : bgDark;
+  const bgBorder = isLight ? 'rgba(0,0,0,0.08)' : isTransparent ? 'none' : 'rgba(255,255,255,0.12)';
+  const specTextColor = isLight ? '#475569' : lightColor;
+  const heroTextColor = isLight ? '#0f172a' : '#ffffff';
+  const badgeBg = isLight ? '#f1f5f9' : bgDark;
+  const badgeTextColor = isLight ? '#0f172a' : lightColor;
+
+  const isAbstract = style === 'abstract';
+  const isRebel = !isAbstract && (
     archetype.toLowerCase().includes('rebel') ||
     archetype.toLowerCase().includes('provocative') ||
-    style === 'radical';
-  const isMuse =
+    style === 'radical'
+  );
+  const isMuse = !isAbstract && (
     archetype.toLowerCase().includes('muse') ||
     archetype.toLowerCase().includes('evocative') ||
-    style === 'emblem';
-  const isAnchor = !isRebel && !isMuse;
+    style === 'emblem'
+  );
+  const isAnchor = !isAbstract && !isRebel && !isMuse;
 
   let glyphSvg = '';
   let promptDescription = '';
 
-  if (isAnchor) {
+  if (isAbstract) {
+    promptDescription = `Minimalist Monogram: Pure optical architectural typography emblem with precision concentric circles and geometric alignment grid for ${safeBrandName}.`;
+    glyphSvg = `
+      <g transform="translate(256, 230)">
+        <circle r="135" fill="none" stroke="${primaryColor}" stroke-width="1.5" opacity="0.3" stroke-dasharray="6 6" />
+        <circle r="105" fill="none" stroke="${accentColor}" stroke-width="2" opacity="0.4" />
+        <circle r="80" fill="url(#anchorGrad1)" opacity="0.15" />
+        <line x1="-150" y1="0" x2="150" y2="0" stroke="${primaryColor}" stroke-width="1" opacity="0.2" />
+        <line x1="0" y1="-150" x2="0" y2="150" stroke="${primaryColor}" stroke-width="1" opacity="0.2" />
+        <rect x="-56" y="-56" width="112" height="112" rx="28" fill="${badgeBg}" stroke="${primaryColor}" stroke-width="3" transform="rotate(45)" filter="url(#subtleGlow)" />
+        <text x="0" y="16" text-anchor="middle" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="900" font-size="44" fill="${heroTextColor}" letter-spacing="4">${safeMonogram}</text>
+      </g>`;
+  } else if (isAnchor) {
     promptDescription = `The Functional Anchor: Precision isometric hexagonal construct with interlocking planes and optical node for ${cleanName}.`;
     glyphSvg = `
       <g transform="translate(256, 230)">
@@ -1270,8 +1333,9 @@ export async function generateCustomBrandLogo(params: GenerateLogoParams) {
         <polygon points="0,-130 112,-65 112,65 0,130 -112,65 -112,-65" fill="none" stroke="${primaryColor}" stroke-width="3" opacity="0.4" />
         <polygon points="0,-115 100,-58 0,0 -100,-58" fill="url(#anchorGrad1)" filter="url(#subtleGlow)" />
         <polygon points="0,0 100,-58 100,58 0,115" fill="url(#anchorGrad2)" />
+        <!-- Isometric Facet 3 (Left) -->
         <polygon points="-100,-58 0,0 0,115 -100,58" fill="url(#anchorGrad3)" />
-        <polygon points="0,-48 42,0 0,48 -42,0" fill="${bgDark}" stroke="${accentColor}" stroke-width="2.5" />
+        <polygon points="0,-48 42,0 0,48 -42,0" fill="${background === 'light' ? '#f8fafc' : background === 'transparent' ? 'none' : bgDark}" stroke="${accentColor}" stroke-width="2.5" />
         <circle cx="0" cy="0" r="14" fill="url(#accentGlow)" />
         <circle cx="0" cy="0" r="6" fill="#ffffff" />
       </g>`;
@@ -1313,9 +1377,6 @@ export async function generateCustomBrandLogo(params: GenerateLogoParams) {
         <polygon points="0,-18 14,-3 25,-8 12,8 18,22 3,12 -12,20 -5,5 -20,-2 -7,-12" fill="#ffffff" />
       </g>`;
   }
-
-  const bgFill = background === 'light' ? '#ffffff' : background === 'transparent' ? 'none' : bgDark;
-  const bgBorder = background === 'light' ? 'rgba(0,0,0,0.08)' : background === 'transparent' ? 'none' : 'rgba(255,255,255,0.12)';
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
@@ -1359,21 +1420,26 @@ export async function generateCustomBrandLogo(params: GenerateLogoParams) {
     </filter>
   </defs>
   ${bgFill !== 'none' ? `<rect width="512" height="512" rx="48" fill="${bgFill}" /><rect width="512" height="512" rx="48" fill="none" stroke="${bgBorder}" stroke-width="2" />` : ''}
-  <g opacity="0.4">
-    <text x="36" y="44" font-family="monospace" font-size="11" fill="${lightColor}" letter-spacing="2">SPEC ID: 0${seed}</text>
-    <text x="476" y="44" text-anchor="end" font-family="monospace" font-size="11" fill="${accentColor}" letter-spacing="1.5">${archetype.toUpperCase()}</text>
-    <line x1="36" y1="56" x2="476" y2="56" stroke="${lightColor}" stroke-width="0.75" opacity="0.2" />
+  <g opacity="${isLight ? '0.7' : '0.4'}">
+    <text x="36" y="44" font-family="monospace" font-size="11" fill="${specTextColor}" letter-spacing="2">SPEC ID: 0${seed}</text>
+    <text x="476" y="44" text-anchor="end" font-family="monospace" font-size="11" fill="${accentColor}" letter-spacing="1.5">${safeArchetypeUpper}</text>
+    <line x1="36" y1="56" x2="476" y2="56" stroke="${specTextColor}" stroke-width="0.75" opacity="${isLight ? '0.3' : '0.2'}" />
   </g>
   ${glyphSvg}
   <g transform="translate(256, 420)">
-    <rect x="-42" y="-30" width="84" height="26" rx="6" fill="${bgDark}" stroke="${primaryColor}" stroke-width="1.5" opacity="0.9" />
-    <text x="0" y="-12" text-anchor="middle" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="800" font-size="15" fill="${lightColor}" letter-spacing="4">${resolvedMonogram}</text>
-    <text x="0" y="24" text-anchor="middle" font-family="'Plus Jakarta Sans', -apple-system, sans-serif" font-weight="800" font-size="20" fill="${background === 'light' ? '#0f172a' : '#ffffff'}" letter-spacing="1">${cleanName}</text>
-    <text x="0" y="46" text-anchor="middle" font-family="monospace" font-size="10" fill="${accentColor}" letter-spacing="2">${themeName.toUpperCase()}</text>
+    <rect x="-42" y="-30" width="84" height="26" rx="6" fill="${badgeBg}" stroke="${primaryColor}" stroke-width="1.5" opacity="0.9" />
+    <text x="0" y="-12" text-anchor="middle" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="800" font-size="15" fill="${badgeTextColor}" letter-spacing="4">${safeMonogram}</text>
+    <text x="0" y="24" text-anchor="middle" font-family="'Plus Jakarta Sans', -apple-system, sans-serif" font-weight="800" font-size="20" fill="${heroTextColor}" letter-spacing="1">${safeBrandName}</text>
+    <text x="0" y="46" text-anchor="middle" font-family="monospace" font-size="10" fill="${accentColor}" letter-spacing="2">${safeThemeNameUpper}</text>
   </g>
 </svg>`;
 
-  const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  let dataUrl = '';
+  try {
+    dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  } catch {
+    dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
 
   return {
     svg,
@@ -1400,6 +1466,7 @@ export async function searchAndSummarizeCompetitors(params: {
 }): Promise<MarketContextSummary> {
   const { idea, brandName = 'Our Brand', customQuery, existingClarified } = params;
   const effectiveQuery = customQuery?.trim() || `${idea} top 3 competitors alternatives direct competitors`;
+  const ai = getAIClient();
 
   if (ai) {
     try {
@@ -1473,7 +1540,7 @@ Return ONLY a valid JSON object matching this schema:
 }`;
 
       const searchResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: DEFAULT_MODEL,
         contents: searchPrompt,
         config: {
           tools: [{ googleSearch: {} }],

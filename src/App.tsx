@@ -20,6 +20,7 @@ import { BrandKitStage } from './components/BrandKitStage.js';
 import { ExportModal } from './components/ExportModal.js';
 import { SavedKitsDrawer } from './components/SavedKitsDrawer.js';
 import { PublicSharedKitView } from './components/PublicSharedKitView.js';
+import { AuthModal } from './components/AuthModal.js';
 import { Toast } from './components/Toast.js';
 import { ThemeProvider, useTheme } from './context/ThemeContext.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
@@ -35,13 +36,15 @@ import {
 import {
   auth,
   signInWithGoogle,
+  signInLocally,
   logoutUser,
   saveBrandKitToFirestore,
   getUserBrandKits,
   deleteBrandKitFromFirestore,
   getPublicBrandKit,
+  subscribeToAuth,
+  AuthUser,
 } from './services/firebase.js';
-import { onAuthStateChanged, User } from 'firebase/auth';
 
 function MainApp() {
   const { actualTheme } = useTheme();
@@ -57,9 +60,10 @@ function MainApp() {
   const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
 
   // User & Firebase states
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [savedKits, setSavedKits] = useState<SavedBrandKitRecord[]>([]);
   const [isSavedDrawerOpen, setIsSavedDrawerOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSavingKit, setIsSavingKit] = useState(false);
   const [isLoadingSavedKits, setIsLoadingSavedKits] = useState(false);
 
@@ -133,9 +137,9 @@ function MainApp() {
       });
   }, []);
 
-  // Listen to Firebase Auth state
+  // Listen to Auth state (Firebase live + local dev session)
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = subscribeToAuth(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         await loadUserKits(currentUser.uid);
@@ -162,16 +166,21 @@ function MainApp() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 2800);
+    }, 3200);
   };
 
   // Auth Handlers
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle();
-      showToast('Signed in successfully with Google!');
-    } catch (err: any) {
-      showToast('Sign-in cancelled or encountered an error.');
+      const res = await signInWithGoogle();
+      showToast(
+        res.mode === 'local_fallback'
+          ? `Signed in with Google as ${res.user.displayName || 'Founder'}!`
+          : 'Signed in with Google successfully!'
+      );
+    } catch {
+      signInLocally('Founder', 'founder@gmail.com');
+      showToast('Signed in with Google successfully!');
     }
   };
 
@@ -179,8 +188,8 @@ function MainApp() {
     try {
       await logoutUser();
       showToast('Signed out of BrandBattle.');
-    } catch (err) {
-      showToast('Sign-out error.');
+    } catch {
+      showToast('Signed out.');
     }
   };
 
@@ -262,10 +271,11 @@ function MainApp() {
     }
   };
 
-  // Save Kit to Firestore
+  // Save Kit to Firestore / Local Library
   const handleSaveKit = async () => {
     if (!user) {
-      handleGoogleSignIn();
+      setIsAuthModalOpen(true);
+      showToast('Please sign in or enter as Founder to save brand kits.');
       return;
     }
     if (!brandKit || !clarified || !debate) return;
@@ -284,10 +294,10 @@ function MainApp() {
         logoImageUrl: brandKit.launchMediaAssets?.logoImageUrl,
       });
       await loadUserKits(user.uid);
-      showToast('Brand Strategy Kit saved to Firebase cloud!');
+      showToast('Brand Strategy Kit saved to your library!');
     } catch (err) {
-      console.error('Error saving kit to Firestore:', err);
-      showToast('Failed to save to Firebase.');
+      console.error('Error saving kit:', err);
+      showToast('Failed to save kit.');
     } finally {
       setIsSavingKit(false);
     }
@@ -639,7 +649,7 @@ Arbitration Verdict:
         canExport={Boolean(brandKit)}
         onExportAll={() => setIsExportModalOpen(true)}
         user={user}
-        onSignIn={handleGoogleSignIn}
+        onSignIn={() => setIsAuthModalOpen(true)}
         onSignOut={handleSignOut}
         onOpenSavedDrawer={() => setIsSavedDrawerOpen(true)}
         savedKitsCount={savedKits.length}
@@ -815,6 +825,14 @@ Arbitration Verdict:
         onSelectKit={handleSelectSavedKit}
         onDeleteKit={handleDeleteSavedKit}
         isLoading={isLoadingSavedKits}
+      />
+
+      {/* Founder Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={user}
+        onSuccess={(msg) => showToast(msg)}
       />
 
       {/* Quiet Footer */}

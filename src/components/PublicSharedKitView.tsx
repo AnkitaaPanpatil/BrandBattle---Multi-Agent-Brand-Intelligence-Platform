@@ -41,10 +41,10 @@ export const PublicSharedKitView: React.FC<PublicSharedKitViewProps> = ({
   const { brandKit, clarified, debate, originalIdea, shareId, createdAt, viewsCount } = record;
 
   const [selectedName, setSelectedName] = useState<NamingOption>(
-    brandKit.namingOptions[0] || {
+    brandKit?.namingOptions?.[0] || {
       id: 'functional',
       archetype: 'The Functional Anchor',
-      name: brandKit.brandNameProposal,
+      name: brandKit?.brandNameProposal || 'Venture Brand',
       rationale: '',
       domainViability: '',
       phoneticVibe: '',

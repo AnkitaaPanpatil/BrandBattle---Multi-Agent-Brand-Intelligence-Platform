@@ -92,7 +92,7 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
     if (option.id === 'provocative') newStyle = 'radical';
     setActiveStyle(newStyle);
 
-    handleGenerateLogo(option.name, option.id, newStyle, seed + 1, false);
+    handleGenerateLogo(option.name, option.id, newStyle, seed + 1, false, backgroundMode);
   };
 
   const handleGenerateLogo = async (
@@ -100,10 +100,13 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
     archetypeId: string,
     styleToUse: 'geometric' | 'emblem' | 'radical' | 'abstract',
     seedToUse: number,
-    showAnimation: boolean = true
+    showAnimation: boolean = true,
+    bgToUse: 'dark' | 'light' | 'transparent' = backgroundMode,
+    monogramToUse?: string
   ) => {
     const currentArchetype = getArchetypeObj(archetypeId);
     const archetypeName = currentArchetype?.archetype || 'The Functional Anchor';
+    const effectiveMonogram = monogramToUse !== undefined ? monogramToUse : (customMonogram || extractMonogram(nameToUse));
 
     if (showAnimation) {
       setIsGenerating(true);
@@ -128,10 +131,10 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
           archetype: archetypeName,
           style: styleToUse,
           colors: brandKit.visualDirection.colorPalette,
-          monogram: customMonogram || extractMonogram(nameToUse),
+          monogram: effectiveMonogram,
           symbolDescription: brandKit.visualDirection.logoConcept.symbolDescription,
           themeName: brandKit.visualDirection.themeName,
-          background: backgroundMode,
+          background: bgToUse,
           seed: seedToUse,
         }),
       });
@@ -150,10 +153,10 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
           archetype: archetypeName,
           style: styleToUse,
           colors: brandKit.visualDirection.colorPalette,
-          monogram: customMonogram || extractMonogram(nameToUse),
+          monogram: effectiveMonogram,
           symbolDescription: brandKit.visualDirection.logoConcept.symbolDescription,
           themeName: brandKit.visualDirection.themeName,
-          background: backgroundMode,
+          background: bgToUse,
           seed: seedToUse,
         });
         setGeneratedLogo(localResult);
@@ -169,10 +172,10 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
         archetype: archetypeName,
         style: styleToUse,
         colors: brandKit.visualDirection.colorPalette,
-        monogram: customMonogram || extractMonogram(nameToUse),
+        monogram: effectiveMonogram,
         symbolDescription: brandKit.visualDirection.logoConcept.symbolDescription,
         themeName: brandKit.visualDirection.themeName,
-        background: backgroundMode,
+        background: bgToUse,
         seed: seedToUse,
       });
       setGeneratedLogo(localResult);
@@ -184,6 +187,11 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
       setIsGenerating(false);
       setGenerationPhase('');
     }
+  };
+
+  const handleBackgroundChange = (newBg: 'dark' | 'light' | 'transparent') => {
+    setBackgroundMode(newBg);
+    handleGenerateLogo(activeBrandName, activeArchetypeId, activeStyle, seed, false, newBg);
   };
 
   const handleDownloadSvg = () => {
@@ -360,6 +368,14 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
                 maxLength={3}
                 value={customMonogram}
                 onChange={(e) => setCustomMonogram(e.target.value.toUpperCase())}
+                onBlur={() => {
+                  handleGenerateLogo(activeBrandName, activeArchetypeId, activeStyle, seed, false, backgroundMode, customMonogram);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleGenerateLogo(activeBrandName, activeArchetypeId, activeStyle, seed, false, backgroundMode, customMonogram);
+                  }
+                }}
                 className="w-full bg-neutral-50 dark:bg-[#070b12] border border-neutral-300 dark:border-[#1e293b] rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-neutral-900 dark:text-white uppercase focus:ring-1 focus:ring-violet-500 focus:outline-none"
               />
             </div>
@@ -370,7 +386,7 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
               </label>
               <select
                 value={backgroundMode}
-                onChange={(e) => setBackgroundMode(e.target.value as any)}
+                onChange={(e) => handleBackgroundChange(e.target.value as any)}
                 className="w-full bg-neutral-50 dark:bg-[#070b12] border border-neutral-300 dark:border-[#1e293b] rounded-lg px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white focus:ring-1 focus:ring-violet-500 focus:outline-none"
               >
                 <option value="dark">Obsidian Dark</option>
@@ -410,13 +426,43 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Format: Vector SVG 512×512</span>
               </span>
-              <span className="uppercase text-amber-600 dark:text-amber-400 font-semibold">
-                {activeBrandName}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono uppercase bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                  {backgroundMode === 'light' ? 'Studio White' : backgroundMode === 'transparent' ? 'Transparent' : 'Obsidian Dark'}
+                </span>
+                <span className="uppercase text-amber-600 dark:text-amber-400 font-semibold">
+                  {activeBrandName}
+                </span>
+              </div>
             </div>
 
             {/* The Main Rendered Vector Logo Box */}
-            <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-2xl overflow-hidden border border-neutral-200/80 dark:border-[#1f2b40] shadow-xl flex items-center justify-center bg-[#070a10] group">
+            <div
+              className={`relative w-64 h-64 sm:w-80 sm:h-80 rounded-2xl overflow-hidden border shadow-xl flex items-center justify-center transition-all duration-200 group ${
+                backgroundMode === 'light'
+                  ? 'border-neutral-300 shadow-neutral-300/50'
+                  : backgroundMode === 'transparent'
+                  ? 'border-neutral-700/80 shadow-black/40'
+                  : 'border-neutral-200/80 dark:border-[#1f2b40]'
+              }`}
+              style={
+                backgroundMode === 'transparent'
+                  ? {
+                      backgroundImage: `
+                        linear-gradient(45deg, #1e293b 25%, transparent 25%),
+                        linear-gradient(-45deg, #1e293b 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #1e293b 75%),
+                        linear-gradient(-45deg, transparent 75%, #1e293b 75%)
+                      `,
+                      backgroundSize: '16px 16px',
+                      backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                      backgroundColor: '#0f172a',
+                    }
+                  : backgroundMode === 'light'
+                  ? { backgroundColor: '#ffffff' }
+                  : { backgroundColor: '#070a10' }
+              }
+            >
               {isGenerating ? (
                 <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
                   <div className="relative">
@@ -451,10 +497,10 @@ export const VisualLogoGenerator: React.FC<VisualLogoGeneratorProps> = ({
                     </div>
                   )}
                   {/* Subtle Tech Corner Accents */}
-                  <div className="absolute top-2 left-2 w-2 h-2 border-t-2 border-l-2 border-violet-500/60 pointer-events-none" />
-                  <div className="absolute top-2 right-2 w-2 h-2 border-t-2 border-r-2 border-violet-500/60 pointer-events-none" />
-                  <div className="absolute bottom-2 left-2 w-2 h-2 border-b-2 border-l-2 border-violet-500/60 pointer-events-none" />
-                  <div className="absolute bottom-2 right-2 w-2 h-2 border-b-2 border-r-2 border-violet-500/60 pointer-events-none" />
+                  <div className={`absolute top-2 left-2 w-2 h-2 border-t-2 border-l-2 pointer-events-none ${backgroundMode === 'light' ? 'border-neutral-400' : 'border-violet-500/60'}`} />
+                  <div className={`absolute top-2 right-2 w-2 h-2 border-t-2 border-r-2 pointer-events-none ${backgroundMode === 'light' ? 'border-neutral-400' : 'border-violet-500/60'}`} />
+                  <div className={`absolute bottom-2 left-2 w-2 h-2 border-b-2 border-l-2 pointer-events-none ${backgroundMode === 'light' ? 'border-neutral-400' : 'border-violet-500/60'}`} />
+                  <div className={`absolute bottom-2 right-2 w-2 h-2 border-b-2 border-r-2 pointer-events-none ${backgroundMode === 'light' ? 'border-neutral-400' : 'border-violet-500/60'}`} />
                 </div>
               ) : (
                 <div className="text-xs font-mono text-neutral-500">No logo generated</div>

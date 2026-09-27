@@ -1,5 +1,7 @@
-import express from 'express';
 import dotenv from 'dotenv';
+dotenv.config({ path: ['.env.local', '.env'] });
+
+import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
@@ -17,8 +19,6 @@ import {
 } from './src/server/geminiService.js';
 import { generateOgCardSvg } from './src/server/ogImageGenerator.js';
 import { getPublicBrandKit } from './src/services/firebase.js';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -361,8 +361,19 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[BrandBattle Server] Running on http://0.0.0.0:${PORT}`);
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[BrandBattle Server] Running on http://localhost:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[BrandBattle Server] Port ${PORT} is already in use by another process.`);
+      console.error(`Tip: You can change the port by setting PORT in .env (e.g. PORT=${PORT + 1}).`);
+      process.exit(1);
+    } else {
+      console.error('[BrandBattle Server] Listen error:', err);
+      process.exit(1);
+    }
   });
 }
 

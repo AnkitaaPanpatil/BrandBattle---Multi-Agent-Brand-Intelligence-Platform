@@ -25,16 +25,15 @@ import { VisualLogoGenerator } from './VisualLogoGenerator.js';
 import { MarketContextSection } from './MarketContextSection.js';
 import { SocialPreviewCard } from './SocialPreviewCard.js';
 import { ShareLinkModal } from './ShareLinkModal.js';
-import { createPublicShareLink } from '../services/firebase.js';
+import { createPublicShareLink, AuthUser } from '../services/firebase.js';
 import { useDynamicOpenGraph } from '../hooks/useDynamicOpenGraph.js';
-import { User } from 'firebase/auth';
 
 interface BrandKitStageProps {
   brandKit: BrandKit;
   clarified: ClarifiedIdea;
   debate: DebateStage;
   idea: string;
-  user: User | null;
+  user: AuthUser | null;
   onSaveKit: () => Promise<void>;
   isSaving: boolean;
   onAskQuestion: (
@@ -171,11 +170,11 @@ export const BrandKitStage: React.FC<BrandKitStageProps> = ({
           <button
             onClick={onSaveKit}
             disabled={isSaving}
-            title="Save Brand Kit to Cloud (Ctrl+S)"
+            title="Save Brand Kit to Library (Ctrl+S)"
             className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white font-bold text-xs sm:text-sm rounded-lg shadow-md transition-all active:scale-[0.98]"
           >
             <Bookmark className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-            <span>{isSaving ? 'Saving to Cloud...' : user ? 'Save to Firebase' : 'Sign In & Save'}</span>
+            <span>{isSaving ? 'Saving...' : user ? 'Save Brand Kit' : 'Sign In & Save'}</span>
             <kbd className="hidden sm:inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-black/20 rounded border border-white/20">
               Ctrl+S
             </kbd>

@@ -11,6 +11,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { BrandKit, NamingOption } from '../types/brand.js';
+import { sanitizeSvgDataUrl } from '../services/logoGenerator.js';
 
 interface InteractiveBrandPreviewProps {
   brandKit: BrandKit;
@@ -29,14 +30,31 @@ export const InteractiveBrandPreview: React.FC<InteractiveBrandPreviewProps> = (
   const [copiedHex, setCopiedHex] = useState<string | null>(null);
   const [heroLogoError, setHeroLogoError] = useState(false);
   const [deckLogoError, setDeckLogoError] = useState(false);
+  const [socialLogoError, setSocialLogoError] = useState(false);
 
   const colors = brandKit.visualDirection.colorPalette;
   const primaryColor = colors[1]?.hex || '#10b981';
 
-  const monogram =
-    brandKit.visualDirection?.logoConcept?.monogramLetters ||
-    selectedName.name.slice(0, 2).toUpperCase() ||
-    'BB';
+  // Sanitize any SVG data URLs to prevent XML entity parse errors
+  const rawLogoUrl = brandKit.launchMediaAssets?.logoImageUrl || '';
+  const sanitizedLogoUrl = React.useMemo(() => sanitizeSvgDataUrl(rawLogoUrl), [rawLogoUrl]);
+
+  // Reset logo errors when the active name or logo URL changes
+  React.useEffect(() => {
+    setHeroLogoError(false);
+    setDeckLogoError(false);
+    setSocialLogoError(false);
+  }, [selectedName.id, sanitizedLogoUrl]);
+
+  // Dynamically resolve monogram matching the active brand name
+  const monogram = React.useMemo(() => {
+    if (!selectedName?.name) return brandKit.visualDirection?.logoConcept?.monogramLetters || 'BB';
+    const words = selectedName.name.trim().split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return selectedName.name.trim().slice(0, 2).toUpperCase() || 'BB';
+  }, [selectedName?.name, brandKit.visualDirection?.logoConcept?.monogramLetters]);
 
   const handleCopyColor = (hex: string) => {
     navigator.clipboard.writeText(hex);
@@ -163,9 +181,9 @@ export const InteractiveBrandPreview: React.FC<InteractiveBrandPreviewProps> = (
                   className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg flex items-center justify-center font-display font-bold text-xs sm:text-sm text-neutral-950 shadow-md overflow-hidden"
                   style={{ backgroundColor: primaryColor }}
                 >
-                  {brandKit.launchMediaAssets?.logoImageUrl && !heroLogoError ? (
+                  {sanitizedLogoUrl && !heroLogoError ? (
                     <img
-                      src={brandKit.launchMediaAssets.logoImageUrl}
+                      src={sanitizedLogoUrl}
                       alt={`${selectedName.name} Logo`}
                       onError={() => setHeroLogoError(true)}
                       className="w-full h-full object-contain"
@@ -237,9 +255,9 @@ export const InteractiveBrandPreview: React.FC<InteractiveBrandPreviewProps> = (
                 className="w-10 sm:w-12 h-10 sm:h-12 rounded-xl flex items-center justify-center font-display font-extrabold text-lg sm:text-xl text-neutral-950 mb-4 shadow-xl overflow-hidden"
                 style={{ backgroundColor: primaryColor }}
               >
-                {brandKit.launchMediaAssets?.logoImageUrl && !deckLogoError ? (
+                {sanitizedLogoUrl && !deckLogoError ? (
                   <img
-                    src={brandKit.launchMediaAssets.logoImageUrl}
+                    src={sanitizedLogoUrl}
                     alt={`${selectedName.name} Logo`}
                     onError={() => setDeckLogoError(true)}
                     className="w-full h-full object-contain"
@@ -272,15 +290,16 @@ export const InteractiveBrandPreview: React.FC<InteractiveBrandPreviewProps> = (
                 className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center font-display font-extrabold text-xl text-neutral-950 mb-3 shadow-md overflow-hidden"
                 style={{ backgroundColor: primaryColor }}
               >
-                {brandKit.launchMediaAssets?.logoImageUrl ? (
+                {sanitizedLogoUrl && !socialLogoError ? (
                   <img
-                    src={brandKit.launchMediaAssets.logoImageUrl}
+                    src={sanitizedLogoUrl}
                     alt={`${selectedName.name} Logo`}
+                    onError={() => setSocialLogoError(true)}
                     className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
+                    loading="eager"
                   />
                 ) : (
-                  brandKit.visualDirection.logoConcept.monogramLetters
+                  <span>{monogram}</span>
                 )}
               </div>
               <div className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-1">

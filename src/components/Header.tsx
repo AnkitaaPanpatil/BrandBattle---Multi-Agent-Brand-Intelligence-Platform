@@ -12,9 +12,10 @@ import {
   Menu,
   X,
   Sparkles,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext.js';
-import { User } from 'firebase/auth';
+import { AuthUser } from '../services/firebase.js';
 
 interface HeaderProps {
   currentStage: number;
@@ -23,7 +24,7 @@ interface HeaderProps {
   hasGeminiKey: boolean | null;
   onExportAll?: () => void;
   canExport?: boolean;
-  user: User | null;
+  user: AuthUser | null;
   onSignIn: () => void;
   onSignOut: () => void;
   onOpenSavedDrawer: () => void;
@@ -189,7 +190,12 @@ export const Header: React.FC<HeaderProps> = ({
           {/* User Sign-In / Profile */}
           {user ? (
             <div className="flex items-center gap-2 pl-2 border-l border-neutral-300 dark:border-[#1a2333]">
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onSignIn}
+                title="Click to view accounts or switch user"
+                className="flex items-center gap-2 p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-[#121824] transition-colors cursor-pointer text-left"
+              >
                 {user.photoURL ? (
                   <img
                     src={user.photoURL}
@@ -198,16 +204,41 @@ export const Header: React.FC<HeaderProps> = ({
                   />
                 ) : (
                   <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-500 font-bold text-xs flex items-center justify-center">
-                    {user.email?.slice(0, 1).toUpperCase() || 'U'}
+                    {user.displayName?.slice(0, 1).toUpperCase() || user.email?.slice(0, 1).toUpperCase() || 'U'}
                   </div>
                 )}
-                <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 max-w-[100px] truncate">
-                  {user.displayName || user.email?.split('@')[0]}
-                </span>
-              </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 max-w-[110px] truncate leading-tight">
+                    {user.displayName || user.email?.split('@')[0]}
+                  </span>
+                  <span className={`text-[9px] font-semibold leading-none ${
+                    user.email === 'guest@brandbattle.local' || user.displayName === 'Guest Mode'
+                      ? 'text-amber-500'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }`}>
+                    {user.email === 'guest@brandbattle.local' || user.displayName === 'Guest Mode'
+                      ? '⚡ Guest Mode'
+                      : (user as any).isLocal
+                      ? user.email?.includes('gmail') ? 'Google Account' : 'Account'
+                      : 'Google OAuth'}
+                  </span>
+                </div>
+              </button>
+
               <button
+                type="button"
+                onClick={onSignIn}
+                title="Switch Account"
+                className="flex items-center gap-1 text-[11px] font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white px-2 py-1 rounded bg-neutral-100 dark:bg-[#111722] hover:bg-neutral-200 dark:hover:bg-[#192334] border border-neutral-200 dark:border-[#1e2738] transition-colors cursor-pointer"
+              >
+                <ArrowLeftRight className="w-3 h-3 text-amber-500" />
+                <span className="hidden lg:inline">Switch</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={onSignOut}
-                className="p-1.5 text-neutral-500 hover:text-rose-500 rounded-md transition-colors"
+                className="p-1.5 text-neutral-500 hover:text-rose-500 rounded-md transition-colors cursor-pointer"
                 title="Sign Out"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -215,11 +246,12 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           ) : (
             <button
+              type="button"
               onClick={onSignIn}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-neutral-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 rounded-md shadow-sm transition-all active:scale-[0.98]"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-neutral-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 rounded-md shadow-sm transition-all active:scale-[0.98] cursor-pointer"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In with Google</span>
+              <span>Sign In / Guest Mode</span>
             </button>
           )}
         </div>
@@ -304,38 +336,75 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* User Status Mobile */}
           {user ? (
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-2">
-                {user.photoURL && (
-                  <img src={user.photoURL} alt="User" className="w-7 h-7 rounded-full border border-neutral-300 dark:border-neutral-700" />
-                )}
-                <div>
-                  <div className="text-xs font-semibold text-neutral-900 dark:text-white">
-                    {user.displayName || 'Logged In'}
-                  </div>
-                  <div className="text-[11px] text-neutral-500 truncate max-w-[200px]">{user.email}</div>
-                </div>
-              </div>
-              <button
+            <div className="flex items-center justify-between py-2 border-y border-neutral-200 dark:border-[#1a2333]">
+              <div
                 onClick={() => {
-                  onSignOut();
+                  onSignIn();
                   setMobileMenuOpen(false);
                 }}
-                className="text-xs text-rose-500 font-medium px-2 py-1 bg-rose-50 dark:bg-rose-950/30 rounded"
+                className="flex items-center gap-2 cursor-pointer"
               >
-                Sign Out
-              </button>
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="User" className="w-7 h-7 rounded-full border border-neutral-300 dark:border-neutral-700" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-500 font-bold text-xs flex items-center justify-center">
+                    {user.displayName?.slice(0, 1).toUpperCase() || user.email?.slice(0, 1).toUpperCase() || 'U'}
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs font-semibold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                    <span>{user.displayName || 'Logged In'}</span>
+                    <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
+                      user.email === 'guest@brandbattle.local' || user.displayName === 'Guest Mode'
+                        ? 'bg-amber-500/20 text-amber-500'
+                        : 'bg-emerald-500/10 text-emerald-500'
+                    }`}>
+                      {user.email === 'guest@brandbattle.local' || user.displayName === 'Guest Mode'
+                        ? '⚡ Guest'
+                        : (user as any).isLocal
+                        ? user.email?.includes('gmail') ? 'Google' : 'Account'
+                        : 'Google'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-neutral-500 truncate max-w-[180px]">
+                    {user.email === 'guest@brandbattle.local' ? 'LocalStorage Mode' : user.email}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSignIn();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="text-xs text-amber-600 dark:text-amber-400 font-medium px-2 py-1 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/40 rounded cursor-pointer"
+                >
+                  Switch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSignOut();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="text-xs text-rose-500 font-medium px-2 py-1 bg-rose-50 dark:bg-rose-950/30 rounded cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
             </div>
           ) : (
             <button
+              type="button"
               onClick={() => {
                 onSignIn();
                 setMobileMenuOpen(false);
               }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold text-neutral-950 bg-amber-400"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold text-neutral-950 bg-amber-400 cursor-pointer"
             >
               <LogIn className="w-4 h-4" />
-              <span>Sign In with Google</span>
+              <span>Sign In / Guest Mode</span>
             </button>
           )}
 

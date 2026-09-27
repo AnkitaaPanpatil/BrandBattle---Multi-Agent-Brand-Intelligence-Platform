@@ -36,6 +36,47 @@ export function escapeXml(unsafe: string | undefined | null): string {
 }
 
 /**
+ * Sanitizes any raw SVG string by repairing bare ampersands and fixing uppercase &AMP;
+ */
+export function sanitizeSvgMarkup(svg: string): string {
+  if (!svg) return '';
+  let fixed = svg.replace(/&AMP;/g, '&amp;');
+  fixed = fixed.replace(/&(?!amp;|lt;|gt;|apos;|quot;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;');
+  return fixed;
+}
+
+/**
+ * Sanitizes an SVG Data URL (whether base64 or charset=utf-8) so it never causes XML parse errors
+ */
+export function sanitizeSvgDataUrl(dataUrl: string): string {
+  if (!dataUrl) return '';
+  if (dataUrl.startsWith('data:image/svg+xml;base64,')) {
+    try {
+      const b64 = dataUrl.slice('data:image/svg+xml;base64,'.length);
+      const decoded = decodeURIComponent(escape(atob(b64)));
+      const sanitized = sanitizeSvgMarkup(decoded);
+      return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(sanitized)))}`;
+    } catch {
+      return dataUrl;
+    }
+  } else if (dataUrl.startsWith('data:image/svg+xml')) {
+    try {
+      const commaIdx = dataUrl.indexOf(',');
+      if (commaIdx !== -1) {
+        const prefix = dataUrl.slice(0, commaIdx + 1);
+        const encoded = dataUrl.slice(commaIdx + 1);
+        const decoded = decodeURIComponent(encoded);
+        const sanitized = sanitizeSvgMarkup(decoded);
+        return `${prefix}${encodeURIComponent(sanitized)}`;
+      }
+    } catch {
+      return dataUrl;
+    }
+  }
+  return dataUrl;
+}
+
+/**
  * Extracts 2-3 clean monogram letters from a brand name
  */
 export function extractMonogram(name: string): string {
@@ -68,8 +109,8 @@ export function generateVectorLogoSvg(options: LogoGeneratorOptions): GeneratedL
   } = options;
 
   const safeBrandName = escapeXml(brandName);
-  const safeArchetype = escapeXml(archetype);
-  const safeThemeName = escapeXml(themeName);
+  const safeArchetypeUpper = escapeXml((archetype || '').toUpperCase());
+  const safeThemeNameUpper = escapeXml((themeName || '').toUpperCase());
   const safeMonogram = escapeXml(monogram);
 
   // Resolve hex colors
@@ -79,26 +120,50 @@ export function generateVectorLogoSvg(options: LogoGeneratorOptions): GeneratedL
   const accentColor = colorList[2] || '#f59e0b';
   const lightColor = colorList[3] || '#f8fafc';
 
-  const isRebel = archetype.toLowerCase().includes('rebel') || archetype.toLowerCase().includes('provocative') || style === 'radical';
-  const isMuse = archetype.toLowerCase().includes('muse') || archetype.toLowerCase().includes('evocative') || style === 'emblem';
-  const isAnchor = !isRebel && !isMuse;
+  const isAbstract = style === 'abstract';
+  const isRebel = !isAbstract && (archetype.toLowerCase().includes('rebel') || archetype.toLowerCase().includes('provocative') || style === 'radical');
+  const isMuse = !isAbstract && (archetype.toLowerCase().includes('muse') || archetype.toLowerCase().includes('evocative') || style === 'emblem');
+  const isAnchor = !isAbstract && !isRebel && !isMuse;
 
   // Background styling
+  const isLight = background === 'light';
+  const isTransparent = background === 'transparent';
+
   let bgFill = bgDark;
   let bgBorder = 'rgba(255, 255, 255, 0.12)';
-  if (background === 'light') {
+  if (isLight) {
     bgFill = '#ffffff';
     bgBorder = 'rgba(0, 0, 0, 0.08)';
-  } else if (background === 'transparent') {
+  } else if (isTransparent) {
     bgFill = 'none';
     bgBorder = 'none';
   }
+
+  const specTextColor = isLight ? '#475569' : lightColor;
+  const heroTextColor = isLight ? '#0f172a' : '#ffffff';
+  const badgeBg = isLight ? '#f1f5f9' : bgDark;
+  const badgeTextColor = isLight ? '#0f172a' : lightColor;
+  const diamondGateFill = isLight ? '#f8fafc' : isTransparent ? 'none' : bgDark;
 
   // Archetype-specific symbol geometry
   let glyphSvg = '';
   let promptDescription = '';
 
-  if (isAnchor) {
+  if (isAbstract) {
+    promptDescription = `Minimalist Monogram: Pure optical architectural typography emblem with precision concentric circles and geometric alignment grid for ${safeBrandName}.`;
+    glyphSvg = `
+      <!-- Minimalist Monogram Optical Emblem -->
+      <g transform="translate(256, 230)">
+        <circle r="135" fill="none" stroke="${primaryColor}" stroke-width="1.5" opacity="0.3" stroke-dasharray="6 6" />
+        <circle r="105" fill="none" stroke="${accentColor}" stroke-width="2" opacity="0.4" />
+        <circle r="80" fill="url(#anchorGrad1)" opacity="0.15" />
+        <line x1="-150" y1="0" x2="150" y2="0" stroke="${primaryColor}" stroke-width="1" opacity="0.2" />
+        <line x1="0" y1="-150" x2="0" y2="150" stroke="${primaryColor}" stroke-width="1" opacity="0.2" />
+        <rect x="-56" y="-56" width="112" height="112" rx="28" fill="${badgeBg}" stroke="${primaryColor}" stroke-width="3" transform="rotate(45)" filter="url(#subtleGlow)" />
+        <text x="0" y="16" text-anchor="middle" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="900" font-size="44" fill="${heroTextColor}" letter-spacing="4">${safeMonogram}</text>
+      </g>
+    `;
+  } else if (isAnchor) {
     promptDescription = `The Functional Anchor: Architectural isometric precision hexagon with converging interlocking vector facets, symbolizing structural defensibility and utility for ${brandName}.`;
     // Geometric Hexagon & Interlocking Core
     glyphSvg = `
@@ -122,7 +187,7 @@ export function generateVectorLogoSvg(options: LogoGeneratorOptions): GeneratedL
         <polygon points="-100,-58 0,0 0,115 -100,58" fill="url(#anchorGrad3)" />
         
         <!-- Inner Core Diamond Gate -->
-        <polygon points="0,-48 42,0 0,48 -42,0" fill="${bgDark}" stroke="${accentColor}" stroke-width="2.5" />
+        <polygon points="0,-48 42,0 0,48 -42,0" fill="${diamondGateFill}" stroke="${accentColor}" stroke-width="2.5" />
         
         <!-- Central Optical Node -->
         <circle cx="0" cy="0" r="14" fill="url(#accentGlow)" />
@@ -252,10 +317,10 @@ export function generateVectorLogoSvg(options: LogoGeneratorOptions): GeneratedL
   }
 
   <!-- Geometric Spec Markers -->
-  <g opacity="0.4">
-    <text x="36" y="44" font-family="monospace" font-size="11" fill="${lightColor}" letter-spacing="2">SPEC ID: 0${seed}</text>
-    <text x="476" y="44" text-anchor="end" font-family="monospace" font-size="11" fill="${accentColor}" letter-spacing="1.5">${safeArchetype.toUpperCase()}</text>
-    <line x1="36" y1="56" x2="476" y2="56" stroke="${lightColor}" stroke-width="0.75" opacity="0.2" />
+  <g opacity="${isLight ? '0.7' : '0.4'}">
+    <text x="36" y="44" font-family="monospace" font-size="11" fill="${specTextColor}" letter-spacing="2">SPEC ID: 0${seed}</text>
+    <text x="476" y="44" text-anchor="end" font-family="monospace" font-size="11" fill="${accentColor}" letter-spacing="1.5">${safeArchetypeUpper}</text>
+    <line x1="36" y1="56" x2="476" y2="56" stroke="${specTextColor}" stroke-width="0.75" opacity="${isLight ? '0.3' : '0.2'}" />
   </g>
 
   <!-- Central Visual Mark / Glyph -->
@@ -264,27 +329,29 @@ export function generateVectorLogoSvg(options: LogoGeneratorOptions): GeneratedL
   <!-- Typography & Monogram Identification -->
   <g transform="translate(256, 420)">
     <!-- Monogram Initials Badge -->
-    <rect x="-42" y="-30" width="84" height="26" rx="6" fill="${bgDark}" stroke="${primaryColor}" stroke-width="1.5" opacity="0.9" />
-    <text x="0" y="-12" text-anchor="middle" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="800" font-size="15" fill="${lightColor}" letter-spacing="4">${safeMonogram}</text>
+    <rect x="-42" y="-30" width="84" height="26" rx="6" fill="${badgeBg}" stroke="${primaryColor}" stroke-width="1.5" opacity="0.9" />
+    <text x="0" y="-12" text-anchor="middle" font-family="'Space Grotesk', -apple-system, sans-serif" font-weight="800" font-size="15" fill="${badgeTextColor}" letter-spacing="4">${safeMonogram}</text>
     
     <!-- Hero Brand Name -->
-    <text x="0" y="24" text-anchor="middle" font-family="'Plus Jakarta Sans', -apple-system, sans-serif" font-weight="800" font-size="20" fill="${background === 'light' ? '#0f172a' : '#ffffff'}" letter-spacing="1">${safeBrandName}</text>
+    <text x="0" y="24" text-anchor="middle" font-family="'Plus Jakarta Sans', -apple-system, sans-serif" font-weight="800" font-size="20" fill="${heroTextColor}" letter-spacing="1">${safeBrandName}</text>
     
     <!-- Subtitle Theme Tag -->
-    <text x="0" y="46" text-anchor="middle" font-family="monospace" font-size="10" fill="${accentColor}" letter-spacing="2">${safeThemeName.toUpperCase()}</text>
+    <text x="0" y="46" text-anchor="middle" font-family="monospace" font-size="10" fill="${accentColor}" letter-spacing="2">${safeThemeNameUpper}</text>
   </g>
 </svg>`;
+
+  const cleanSvg = sanitizeSvgMarkup(svg);
 
   // Base64 Data URL for robust cross-browser <img> src injection
   let dataUrl = '';
   try {
-    dataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+    dataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(cleanSvg)))}`;
   } catch {
-    dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(cleanSvg)}`;
   }
 
   return {
-    svg,
+    svg: cleanSvg,
     dataUrl,
     brandName,
     archetype,

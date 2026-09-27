@@ -33,8 +33,8 @@ export const SocialPreviewCard: React.FC<SocialPreviewCardProps> = ({
   const brandName = selectedName.name || brandKit.brandNameProposal;
   const pitch = brandKit.oneLinePitch;
   const archetype = selectedName.archetype || 'Strategic Identity';
-  const theme = brandKit.visualDirection.themeName;
-  const primaryColor = brandKit.visualDirection.colorPalette[0]?.hex || '#06b6d4';
+  const theme = brandKit?.visualDirection?.themeName || 'Modern Kinetic';
+  const primaryColor = brandKit?.visualDirection?.colorPalette?.[0]?.hex || '#06b6d4';
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const rawHostname = typeof window !== 'undefined' ? window.location.hostname : 'brandbattle.studio';
